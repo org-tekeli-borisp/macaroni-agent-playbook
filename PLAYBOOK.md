@@ -67,6 +67,15 @@ Known rough edges:
   this Portage).
 
 ### Identity & credentials
+- **Git identity is set by the HUMAN and used verbatim by the agent — never invented.**
+  Before the loop commits anything, the operator sets it explicitly on the host AND inside
+  every build container (they start with none):
+  `git config --global user.name "<name>" && git config --global user.email "<email>"`.
+  The agent reads `git config user.name` / `user.email` in the repo it operates on and commits
+  as exactly that identity (if a repo carries a stale local override, remove it rather than
+  passing a guessed `--author`). If no identity is configured → STOP and ask; never
+  "hallucinate" a plausible name/email — commit authorship is DCO-relevant and lives in the
+  org's history forever. (macaroni-os also expects attribution trailers — see §3.19.)
 - `gh` CLI logged in via **browser OAuth** (`gh auth login -p https -w`) — gives API + push rights
   for your fork; kit repos (e.g. `python-modules-kit`, `net-kit`, `core-hw-kit`) often accept
   **direct branches from team members** (verify per repo: `gh api repos/macaroni-os/<kit> --jq .permissions`);
@@ -147,6 +156,11 @@ Known rough edges:
 18. Provenance comments in generated ebuilds say **Mark**, never Gentoo/Funtoo ("Drop old Gentoo
     reference and replace them with Mark"). USE flags gating packages not in the tree get
     simplified to the house equivalent (no `libressl` in tree → plain `ssl? ( dev-libs/openssl:= )`).
+19. Org commits carry an attribution trailer block (requested on macaroni-os/ai-agent-playbook#1):
+    `LLM-assisted-by: <model id (size, location)> via <agent harness>` plus
+    `Signed-off-by: <the operator's git identity>` at the end of the commit message. Exact
+    keywords are the maintainer's call — but the identity is always the human's configured one
+    (§2), never one the agent made up.
 
 ## 4. Fix-pattern quick table
 
@@ -214,6 +228,13 @@ h. GitHub CLI/git mechanics biting real runs: `gh pr create --head owner:repo:br
    `gh api repos/<org>/<repo>/pulls --input <json>` with the body from a file via jq `--rawfile`;
    git ≥2.49 in containers may silently ignore netrc-style `/root/.git-credentials` → use
    inline-URL credentials or a shred-after askpass helper, push output silenced.
+i. Agent INVENTS a git identity — plausible-looking name + domain never supplied by the
+   operator (or lets identity drift between branches within one session: GitHub-noreply vs
+   org alias vs invented). Both observed 2026-10-25. Prevent per §2 (mirror host → container
+   once; read, never guess). Repair while PRs are OPEN: amend author + lease-push, then verify
+   via `gh api .../pulls/<n>/commits` that the head author moved — and check which repo/branch
+   the PR head actually tracks first (intra-repo vs fork PRs — see the #489 lesson; an amended
+   branch the PR does not track fixes nothing). NEVER rewrite merged history.
 
 ## 8. Feedback sweep (do it between every task)
 
