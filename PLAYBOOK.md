@@ -125,6 +125,28 @@ Known rough edges:
     changes get **converted to autogen** in the same PR (this is the accepted standard, see
     libdbi-drivers/gtest/libedit/xvid/mpg123 merged PRs); verify the generated ebuild matches the
     current tree semantics (same phases/deps; Manifest DIST bytes identical where applicable).
+14. Use the dedicated spec keys, never hand-write the ebuild equivalent in `body`: `cdepend:` →
+    renders `CDEPEND` (and reference it from `rdepend`/`depend`), `patches:` → renders the eclass
+    `PATCHES=( "${FILESDIR}/…" )` array, `iuse/license/required_use/extra_envs:` likewise. Beware:
+    switching hand-written `PATCHES=` to `patches:` makes previously-inert patches **live** —
+    `patch --dry-run` them against every version track first and use per-track `patches:` (a
+    `patches: []` track is legitimate when upstream absorbed the fix).
+15. Never set an `eapi` var (the template applies it). Prefer `body:` over `body_raw:` (body runs
+    a per-line leading-space-pair→tab normaliser, which is the house render style). Template
+    variables inside `body:` need the `$` form — `{{ $php_mv := first ( splitList "." .Values.pv ) }}`
+    then `{{ $php_mv }}` — and `extra_envs:` entries are also rendered in the values context (pv
+    available), but a render-var in `body:` is the maintainer-preferred style.
+16. `exclude:` is an **atom-level** key (inherit it via `defaults:` so every version track gets
+    it). A `github:`-section `exclude:` is silently ignored by current mark-devkit (no field on
+    the github props struct; verified by discriminating probe 2026-10-25) — where the maintainer
+    asks for that placement anyway, keep both and prove which one filters. Whenever placement or
+    regex semantics of a generator key is in doubt, run the probe: exclude the currently-selected
+    version and check the selection steps to the next candidate.
+17. Prefer a simple `string` transform over regex when the release titles allow it (match the real
+    title format — read a few titles first: "libnl 3.12.0" needs only `match: 'libnl '`).
+18. Provenance comments in generated ebuilds say **Mark**, never Gentoo/Funtoo ("Drop old Gentoo
+    reference and replace them with Mark"). USE flags gating packages not in the tree get
+    simplified to the house equivalent (no `libressl` in tree → plain `ssl? ( dev-libs/openssl:= )`).
 
 ## 4. Fix-pattern quick table
 
@@ -183,6 +205,15 @@ e. Agent claims “verified X” in the same message that performed no verificat
    before it becomes a public reply.
 f. Container dirt accumulates (stale workdirs, test dirs, leftover ebuilds) — restore per §5.4;
    it poisons the next reproduce.
+g. Template render errors in `body:` are only WARNINGS → a silently truncated ebuild (observed: a
+   3.7 KB output where ~700 lines are expected). Always validate every generated file: size/line
+   count vs baseline, `bash -n`, grep for `{{` residue. Template assignments need the `$` sigil —
+   `{{ $x := … }}` — otherwise the render fails with `function "x" not defined` (see §3.15).
+h. GitHub CLI/git mechanics biting real runs: `gh pr create --head owner:repo:branch` is rejected
+   for cross-named forks (cli/cli#10093) → create the PR via
+   `gh api repos/<org>/<repo>/pulls --input <json>` with the body from a file via jq `--rawfile`;
+   git ≥2.49 in containers may silently ignore netrc-style `/root/.git-credentials` → use
+   inline-URL credentials or a shred-after askpass helper, push output silenced.
 
 ## 8. Feedback sweep (do it between every task)
 
